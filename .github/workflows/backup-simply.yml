@@ -1,0 +1,359 @@
+name: Backup Simply production and test
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cafelif-simply-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Pull, encrypt and publish backup
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Validate configuration
+        id: validate
+        shell: bash
+        env:
+          AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+          SSH_HOST: ${{ vars.SIMPLY_SSH_HOST }}
+          SSH_PORT: ${{ vars.SIMPLY_SSH_PORT }}
+          SSH_USER: ${{ vars.SIMPLY_SSH_USER }}
+          PROD_REMOTE_PATH: ${{ vars.PROD_REMOTE_PATH }}
+          TEST_REMOTE_PATH: ${{ vars.TEST_REMOTE_PATH }}
+          PROD_DB_HOST: ${{ vars.PROD_DB_HOST }}
+          PROD_DB_PORT: ${{ vars.PROD_DB_PORT }}
+          PROD_DB_NAME: ${{ vars.PROD_DB_NAME }}
+          PROD_DB_USER: ${{ vars.PROD_DB_USER }}
+          TEST_DB_HOST: ${{ vars.TEST_DB_HOST }}
+          TEST_DB_PORT: ${{ vars.TEST_DB_PORT }}
+          TEST_DB_NAME: ${{ vars.TEST_DB_NAME }}
+          TEST_DB_USER: ${{ vars.TEST_DB_USER }}
+          RETENTION_COUNT: ${{ vars.BACKUP_RETENTION_COUNT }}
+          SSH_PRIVATE_KEY: ${{ secrets.SIMPLY_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SIMPLY_SSH_KNOWN_HOSTS }}
+          PROD_DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          TEST_DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          required=(
+            AGE_RECIPIENT SSH_HOST SSH_PORT SSH_USER PROD_REMOTE_PATH
+            TEST_REMOTE_PATH PROD_DB_HOST PROD_DB_PORT PROD_DB_NAME
+            PROD_DB_USER TEST_DB_HOST TEST_DB_PORT TEST_DB_NAME TEST_DB_USER
+            SSH_PRIVATE_KEY SSH_KNOWN_HOSTS PROD_DB_PASSWORD TEST_DB_PASSWORD
+          )
+
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing GitHub configuration: ${name}"
+              exit 1
+            fi
+          done
+
+          if [[ ! "$SSH_PORT" =~ ^[0-9]+$ ]] ||
+             [[ ! "$PROD_DB_PORT" =~ ^[0-9]+$ ]] ||
+             [[ ! "$TEST_DB_PORT" =~ ^[0-9]+$ ]]; then
+            echo "::error::SSH and database ports must be numeric."
+            exit 1
+          fi
+
+          safe_path='^/[A-Za-z0-9._/-]+$'
+          if [[ ! "$PROD_REMOTE_PATH" =~ $safe_path ]] ||
+             [[ ! "$TEST_REMOTE_PATH" =~ $safe_path ]]; then
+            echo "::error::Remote paths must be absolute and contain only letters, numbers, dot, underscore, slash and dash."
+            exit 1
+          fi
+
+          retention="${RETENTION_COUNT:-30}"
+          if [[ ! "$retention" =~ ^[1-9][0-9]*$ ]] || (( retention > 100 )); then
+            echo "::error::BACKUP_RETENTION_COUNT must be between 1 and 100."
+            exit 1
+          fi
+
+          if [[ "$PROD_REMOTE_PATH" == "$TEST_REMOTE_PATH" ]]; then
+            echo "::error::Production and test remote paths must be different."
+            exit 1
+          fi
+
+          if [[ "$PROD_DB_NAME" != "cafelif_dk_db" ]] ||
+             [[ "$TEST_DB_NAME" != "cafelif_dk_db_cafelif_test" ]]; then
+            echo "::error::Unexpected production or test database name."
+            exit 1
+          fi
+
+          if [[ "$PROD_DB_HOST" == "$TEST_DB_HOST" ]] &&
+             [[ "$PROD_DB_PORT" == "$TEST_DB_PORT" ]] &&
+             [[ "$PROD_DB_NAME" == "$TEST_DB_NAME" ]]; then
+            echo "::error::Production and test must never use the same database."
+            exit 1
+          fi
+
+          echo "retention_count=$retention" >> "$GITHUB_OUTPUT"
+
+      - name: Install backup tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes age default-mysql-client jq openssh-client
+
+      - name: Configure verified SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SIMPLY_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SIMPLY_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/cafelif-ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/cafelif-ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cafelif-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/cafelif-ssh/id_ed25519"
+
+      - name: Pull production and test files
+        shell: bash
+        env:
+          SSH_HOST: ${{ vars.SIMPLY_SSH_HOST }}
+          SSH_PORT: ${{ vars.SIMPLY_SSH_PORT }}
+          SSH_USER: ${{ vars.SIMPLY_SSH_USER }}
+          PROD_REMOTE_PATH: ${{ vars.PROD_REMOTE_PATH }}
+          TEST_REMOTE_PATH: ${{ vars.TEST_REMOTE_PATH }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p \
+            "$RUNNER_TEMP/cafelif-backup/production/site" \
+            "$RUNNER_TEMP/cafelif-backup/test/site"
+
+          scp_options=(
+            -r
+            -P "$SSH_PORT"
+            -i "$RUNNER_TEMP/cafelif-ssh/id_ed25519"
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -o "UserKnownHostsFile=$RUNNER_TEMP/cafelif-ssh/known_hosts"
+            -o ConnectTimeout=20
+          )
+
+          scp "${scp_options[@]}" \
+            "${SSH_USER}@${SSH_HOST}:${PROD_REMOTE_PATH%/}/." \
+            "$RUNNER_TEMP/cafelif-backup/production/site/"
+
+          scp "${scp_options[@]}" \
+            "${SSH_USER}@${SSH_HOST}:${TEST_REMOTE_PATH%/}/." \
+            "$RUNNER_TEMP/cafelif-backup/test/site/"
+
+          # Testmiljøet sikkerhedskopieres separat og skal ikke ligge dobbelt
+          # inde i produktionsarkivet.
+          if [[ -d "$RUNNER_TEMP/cafelif-backup/production/site/test" ]]; then
+            rm -rf -- "$RUNNER_TEMP/cafelif-backup/production/site/test"
+          fi
+
+      - name: Dump production and test databases
+        shell: bash
+        env:
+          PROD_DB_HOST: ${{ vars.PROD_DB_HOST }}
+          PROD_DB_PORT: ${{ vars.PROD_DB_PORT }}
+          PROD_DB_NAME: ${{ vars.PROD_DB_NAME }}
+          PROD_DB_USER: ${{ vars.PROD_DB_USER }}
+          PROD_DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          TEST_DB_HOST: ${{ vars.TEST_DB_HOST }}
+          TEST_DB_PORT: ${{ vars.TEST_DB_PORT }}
+          TEST_DB_NAME: ${{ vars.TEST_DB_NAME }}
+          TEST_DB_USER: ${{ vars.TEST_DB_USER }}
+          TEST_DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          quote_mysql_value() {
+            local value="$1"
+            if [[ "$value" == *$'\n'* ]] || [[ "$value" == *$'\r'* ]]; then
+              echo "::error::A MySQL credential contains a newline."
+              exit 1
+            fi
+            value="${value//\\/\\\\}"
+            value="${value//\"/\\\"}"
+            printf '"%s"' "$value"
+          }
+
+          write_client_file() {
+            local path="$1"
+            local host="$2"
+            local port="$3"
+            local user="$4"
+            local password="$5"
+            {
+              printf '[client]\n'
+              printf 'host=%s\n' "$(quote_mysql_value "$host")"
+              printf 'port=%s\n' "$port"
+              printf 'user=%s\n' "$(quote_mysql_value "$user")"
+              printf 'password=%s\n' "$(quote_mysql_value "$password")"
+              printf 'default-character-set=utf8mb4\n'
+            } > "$path"
+            chmod 600 "$path"
+          }
+
+          prod_cnf="$RUNNER_TEMP/cafelif-prod.cnf"
+          test_cnf="$RUNNER_TEMP/cafelif-test.cnf"
+
+          write_client_file \
+            "$prod_cnf" "$PROD_DB_HOST" "$PROD_DB_PORT" \
+            "$PROD_DB_USER" "$PROD_DB_PASSWORD"
+
+          write_client_file \
+            "$test_cnf" "$TEST_DB_HOST" "$TEST_DB_PORT" \
+            "$TEST_DB_USER" "$TEST_DB_PASSWORD"
+
+          mysqldump \
+            --defaults-extra-file="$prod_cnf" \
+            --single-transaction \
+            --quick \
+            --skip-lock-tables \
+            --no-tablespaces \
+            --hex-blob \
+            --routines \
+            --events \
+            --triggers \
+            --default-character-set=utf8mb4 \
+            --result-file="$RUNNER_TEMP/cafelif-backup/production/database.sql" \
+            "$PROD_DB_NAME"
+
+          mysqldump \
+            --defaults-extra-file="$test_cnf" \
+            --single-transaction \
+            --quick \
+            --skip-lock-tables \
+            --no-tablespaces \
+            --hex-blob \
+            --routines \
+            --events \
+            --triggers \
+            --default-character-set=utf8mb4 \
+            --result-file="$RUNNER_TEMP/cafelif-backup/test/database.sql" \
+            "$TEST_DB_NAME"
+
+          for dump in \
+            "$RUNNER_TEMP/cafelif-backup/production/database.sql" \
+            "$RUNNER_TEMP/cafelif-backup/test/database.sql"; do
+            if [[ ! -s "$dump" ]]; then
+              echo "::error::Database dump is empty: $dump"
+              exit 1
+            fi
+          done
+
+      - name: Encrypt complete snapshots
+        id: encrypt
+        shell: bash
+        env:
+          AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          stamp="$(date -u +'%Y%m%dT%H%M%SZ')"
+          output="$RUNNER_TEMP/cafelif-release"
+          mkdir -p "$output"
+
+          for environment in production test; do
+            snapshot="$RUNNER_TEMP/cafelif-backup/$environment"
+            if [[ ! -f "$snapshot/site/index.php" ]] ||
+               [[ ! -d "$snapshot/site/admin" ]] ||
+               [[ ! -d "$snapshot/site/uploads" ]]; then
+              echo "::error::Required site content is missing for ${environment}."
+              exit 1
+            fi
+
+            file_count="$(find "$snapshot/site" -type f | wc -l | tr -d ' ')"
+            byte_count="$(du -sb "$snapshot/site" | cut -f1)"
+            db_bytes="$(stat -c '%s' "$snapshot/database.sql")"
+            db_sha256="$(sha256sum "$snapshot/database.sql" | cut -d' ' -f1)"
+
+            if (( file_count == 0 || byte_count == 0 || db_bytes == 0 )); then
+              echo "::error::Snapshot content is empty for ${environment}."
+              exit 1
+            fi
+
+            jq -n \
+              --arg environment "$environment" \
+              --arg captured_at_utc "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+              --arg database_sha256 "$db_sha256" \
+              --argjson file_count "$file_count" \
+              --argjson site_bytes "$byte_count" \
+              --argjson database_bytes "$db_bytes" \
+              '{
+                environment: $environment,
+                captured_at_utc: $captured_at_utc,
+                file_count: $file_count,
+                site_bytes: $site_bytes,
+                database_bytes: $database_bytes,
+                database_sha256: $database_sha256
+              }' > "$snapshot/snapshot-manifest.json"
+
+            tarball="$RUNNER_TEMP/cafelif-${environment}-${stamp}.tar.gz"
+            encrypted="$output/cafelif-${environment}-${stamp}.tar.gz.age"
+            tar -C "$snapshot" -czf "$tarball" .
+            age --encrypt --recipient "$AGE_RECIPIENT" --output "$encrypted" "$tarball"
+          done
+
+          (
+            cd "$output"
+            sha256sum *.age > SHA256SUMS
+          )
+
+          echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
+          echo "output=$output" >> "$GITHUB_OUTPUT"
+
+      - name: Publish private backup release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAMP: ${{ steps.encrypt.outputs.stamp }}
+          OUTPUT: ${{ steps.encrypt.outputs.output }}
+        run: |
+          set -euo pipefail
+
+          tag="backup-${STAMP}"
+          notes="Encrypted Café LIF production and test backup. No plaintext site files, SQL dumps or credentials are stored in Git history."
+
+          gh release create "$tag" \
+            "$OUTPUT"/*.age \
+            "$OUTPUT/SHA256SUMS" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target main \
+            --title "Café LIF backup ${STAMP}" \
+            --notes "$notes"
+
+      - name: Apply release retention
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RETENTION_COUNT: ${{ steps.validate.outputs.retention_count }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t tags < <(
+            gh release list \
+              --repo "$GITHUB_REPOSITORY" \
+              --limit 100 \
+              --json tagName,createdAt \
+              --jq 'sort_by(.createdAt) | reverse | .[].tagName' |
+              grep '^backup-' || true
+          )
+
+          for ((index=RETENTION_COUNT; index<${#tags[@]}; index++)); do
+            gh release delete "${tags[$index]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --cleanup-tag \
+              --yes
+          done
