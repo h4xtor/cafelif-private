@@ -315,7 +315,7 @@ if (-not (Test-Path -LiteralPath $sshPrivateKeyPath -PathType Leaf)) {
     Write-Host 'SSH-keygen spørger nu efter passphrase. Tryk Enter to gange, fordi GitHub Actions-nøglen skal være dedikeret og ikke-interaktiv.' -ForegroundColor Yellow
     Invoke-Checked -Command 'ssh-keygen' -Arguments @(
         '-t', 'ed25519', '-a', '100', '-f', $sshPrivateKeyPath,
-        '-N', '', '-C', 'cafelif-github-backup'
+        '-C', 'cafelif-github-backup'
     ) -FailureMessage 'Den dedikerede SSH-nøgle kunne ikke oprettes.'
 }
 Protect-PrivateFile -Path $sshPrivateKeyPath
