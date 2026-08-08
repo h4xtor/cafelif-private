@@ -43,28 +43,46 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "Starter en frisk, read-only Simply-backup i $Repository ..." -ForegroundColor Cyan
 $dispatchStartedAt = [DateTimeOffset]::UtcNow
+$existingRunIds = @{}
+$existingRunsJson = (& gh run list --repo $Repository --workflow 'backup-simply.yml' --event workflow_dispatch --limit 20 --json 'databaseId')
+if ($LASTEXITCODE -ne 0) {
+    throw 'Eksisterende GitHub Actions-kørsler kunne ikke læses før start.'
+}
+
+$existingRuns = $existingRunsJson | ConvertFrom-Json
+foreach ($existingRun in @($existingRuns)) {
+    $existingRunIds[[string]$existingRun.databaseId] = $true
+}
+
 & gh workflow run 'backup-simply.yml' --repo $Repository
 if ($LASTEXITCODE -ne 0) {
     throw 'GitHub-workflowet kunne ikke startes.'
 }
 
 $run = $null
-for ($attempt = 0; $attempt -lt 10 -and $null -eq $run; $attempt++) {
+$discoveryDeadline = [DateTimeOffset]::UtcNow.AddMinutes(2)
+do {
     Start-Sleep -Seconds 2
     $runsJson = (& gh run list --repo $Repository --workflow 'backup-simply.yml' --event workflow_dispatch --limit 20 --json 'databaseId,status,conclusion,url,createdAt')
     if ($LASTEXITCODE -ne 0) {
-        throw 'GitHub Actions-kørslerne kunne ikke læses.'
+        Write-Warning 'GitHub Actions-kørslerne kunne ikke læses endnu; prøver igen.'
+        continue
     }
 
-    $run = $runsJson |
-        ConvertFrom-Json |
-        Where-Object { [DateTimeOffset]$_.createdAt -ge $dispatchStartedAt.AddSeconds(-5) } |
+    # Windows PowerShell 5.1 sender en JSON-array som ét Object[] fra
+    # ConvertFrom-Json. Gem resultatet først, så pipelinen enumererer runs.
+    $runs = $runsJson | ConvertFrom-Json
+    $run = @($runs) |
+        Where-Object {
+            -not $existingRunIds.ContainsKey([string]$_.databaseId) -and
+            [DateTimeOffset]($_.createdAt) -ge $dispatchStartedAt.AddSeconds(-5)
+        } |
         Sort-Object -Property createdAt -Descending |
         Select-Object -First 1
-}
+} while ($null -eq $run -and [DateTimeOffset]::UtcNow -lt $discoveryDeadline)
 
 if ($null -eq $run) {
-    throw 'Den netop startede GitHub-workflow-kørsel kunne ikke findes inden for 20 sekunder.'
+    throw 'Den netop startede GitHub-workflow-kørsel kunne ikke findes inden for 2 minutter. Kontroller repositoryets Actions-side.'
 }
 
 Write-Host "Workflow: $($run.url)"
@@ -72,7 +90,10 @@ Write-Host "Workflow: $($run.url)"
 if ($Wait) {
     & gh run watch ([string]$run.databaseId) --repo $Repository --exit-status
     if ($LASTEXITCODE -ne 0) {
-        throw 'Backup-workflowet sluttede med fejl. Åbn workflow-linket og se den fejlede kontrol.'
+        Write-Host ''
+        Write-Host 'Fejlede loglinjer fra GitHub Actions:' -ForegroundColor Red
+        & gh run view ([string]$run.databaseId) --repo $Repository --log-failed
+        throw "Backup-workflowet sluttede med fejl: $($run.url)"
     }
 
     Write-Host 'Backup og krypteret GitHub Release er gennemført.' -ForegroundColor Green

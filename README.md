@@ -4,12 +4,16 @@ Dette private repository indeholder kun backupautomatiseringen. Livefiler, SQL-d
 
 ## Backupmodel
 
-- GitHub Actions kører hver nat kl. `03:17 UTC` og kan også startes manuelt.
+- GitHub Actions er planlagt til hver nat kl. `03:00 Europe/Copenhagen` og kan også startes manuelt.
 - Produktion og test hentes og dumpes separat.
 - MySQL-dumps bruger `--single-transaction`, `--quick`, `--skip-lock-tables` og `--no-tablespaces`.
 - Hvert miljø pakkes separat og krypteres med `age`, før det uploades som en privat GitHub Release.
 - `SHA256SUMS` følger hver release.
+- De publicerede releasefiler downloades igen og SHA-256-verificeres, før backupen markeres som gennemført.
 - De nyeste 30 komplette backupreleases bevares.
+- Efter hver kørsel sender en separat status-job en mail med succes eller fejl og konkrete trinstatusser.
+
+Ved en kontrolleret fejlmail-test kan workflowet startes manuelt med inputtet `simulate_failure=true`. Testen stopper før filer og databaser hentes og ændrer ingen backupdata.
 - Repositoryets Git-historik indeholder ikke et læsbart spejl af livekoden.
 
 ## Nødvendig GitHub-konfiguration
@@ -22,6 +26,10 @@ Repository Variables:
 - `PROD_REMOTE_PATH`, `TEST_REMOTE_PATH`
 - `PROD_DB_HOST`, `PROD_DB_PORT`, `PROD_DB_NAME`, `PROD_DB_USER`
 - `TEST_DB_HOST`, `TEST_DB_PORT`, `TEST_DB_NAME`, `TEST_DB_USER`
+- `BACKUP_SMTP_HOST`, `BACKUP_SMTP_PORT`
+- `BACKUP_NOTIFICATION_EMAIL`
+
+GitHub Actions skal bruge `smtp.simply.com` på port `587` med STARTTLS. `websmtp.simply.com` virker kun fra Simplys egne webservere og må ikke bruges af GitHub-runneren.
 
 Repository Secrets:
 
@@ -29,6 +37,8 @@ Repository Secrets:
 - `SIMPLY_SSH_KNOWN_HOSTS`
 - `PROD_DB_PASSWORD`
 - `TEST_DB_PASSWORD`
+- `BACKUP_SMTP_USERNAME`
+- `BACKUP_SMTP_PASSWORD`
 
 Den private `age`-identitet må kun opbevares lokalt og i en separat password manager. GitHub får kun den offentlige modtagernøgle.
 
