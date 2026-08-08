@@ -27,6 +27,8 @@ Repository Variables:
 - `BACKUP_SMTP_HOST`, `BACKUP_SMTP_PORT`
 - `BACKUP_NOTIFICATION_EMAIL`
 
+GitHub Actions skal bruge `smtp.simply.com` på port `587` med STARTTLS. `websmtp.simply.com` virker kun fra Simplys egne webservere og må ikke bruges af GitHub-runneren.
+
 Repository Secrets:
 
 - `SIMPLY_SSH_PRIVATE_KEY`
