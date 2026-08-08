@@ -450,6 +450,7 @@ jobs:
           RELEASE_TAG: ${{ needs.backup.outputs.release_tag }}
           SMTP_HOST: ${{ vars.BACKUP_SMTP_HOST }}
           SMTP_PORT: ${{ vars.BACKUP_SMTP_PORT }}
+          FROM_EMAIL: ${{ vars.BACKUP_FROM_EMAIL }}
           SMTP_USERNAME: ${{ secrets.BACKUP_SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.BACKUP_SMTP_PASSWORD }}
           NOTIFICATION_EMAIL: ${{ vars.BACKUP_NOTIFICATION_EMAIL }}
@@ -473,6 +474,7 @@ jobs:
               "BACKUP_RESULT",
               "SMTP_HOST",
               "SMTP_PORT",
+              "FROM_EMAIL",
               "SMTP_USERNAME",
               "SMTP_PASSWORD",
               "NOTIFICATION_EMAIL",
@@ -563,7 +565,8 @@ jobs:
 
           message = EmailMessage()
           message["Subject"] = f"[Café LIF natbackup] {status} - {local_time:%Y-%m-%d}"
-          message["From"] = formataddr(("Café LIF backup", os.environ["SMTP_USERNAME"]))
+          message["From"] = formataddr(("Café LIF backup", os.environ["FROM_EMAIL"]))
+          message["Reply-To"] = os.environ["FROM_EMAIL"]
           message["To"] = os.environ["NOTIFICATION_EMAIL"]
           message.set_content(text_body)
           message.add_alternative(html_body, subtype="html")
