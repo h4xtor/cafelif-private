@@ -3,7 +3,8 @@ name: Backup Simply production and test
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 3 * * *"
+    - cron: "0 3 * * *"
+      timezone: "Europe/Copenhagen"
 
 permissions:
   contents: write
@@ -17,6 +18,8 @@ jobs:
     name: Pull, encrypt and publish backup
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      release_tag: ${{ steps.encrypt.outputs.stamp && format('backup-{0}', steps.encrypt.outputs.stamp) || '' }}
 
     steps:
       - name: Validate configuration
@@ -100,6 +103,7 @@ jobs:
           echo "retention_count=$retention" >> "$GITHUB_OUTPUT"
 
       - name: Install backup tools
+        id: tools
         shell: bash
         run: |
           set -euo pipefail
@@ -107,6 +111,7 @@ jobs:
           sudo apt-get install --yes age default-mysql-client jq openssh-client
 
       - name: Configure verified SSH
+        id: ssh
         shell: bash
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SIMPLY_SSH_PRIVATE_KEY }}
@@ -120,6 +125,7 @@ jobs:
           chmod 600 "$RUNNER_TEMP/cafelif-ssh/id_ed25519"
 
       - name: Pull production and test files
+        id: files
         shell: bash
         env:
           SSH_HOST: ${{ vars.SIMPLY_SSH_HOST }}
@@ -160,6 +166,7 @@ jobs:
           fi
 
       - name: Dump production and test databases
+        id: databases
         shell: bash
         env:
           PROD_DB_HOST: ${{ vars.PROD_DB_HOST }}
@@ -315,6 +322,7 @@ jobs:
           echo "output=$output" >> "$GITHUB_OUTPUT"
 
       - name: Publish private backup release
+        id: publish
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -334,7 +342,59 @@ jobs:
             --title "Café LIF backup ${STAMP}" \
             --notes "$notes"
 
+      - name: Verify published backup release
+        id: verify
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAMP: ${{ steps.encrypt.outputs.stamp }}
+        run: |
+          set -euo pipefail
+
+          tag="backup-${STAMP}"
+          verify_dir="$RUNNER_TEMP/cafelif-release-verification"
+          mkdir -p "$verify_dir"
+
+          gh release download "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir "$verify_dir"
+
+          expected=(
+            "SHA256SUMS"
+            "cafelif-production-${STAMP}.tar.gz.age"
+            "cafelif-test-${STAMP}.tar.gz.age"
+          )
+
+          for asset in "${expected[@]}"; do
+            if [[ ! -s "$verify_dir/$asset" ]]; then
+              echo "::error::Published backup asset is missing or empty: ${asset}"
+              exit 1
+            fi
+          done
+
+          if (( $(find "$verify_dir" -maxdepth 1 -type f | wc -l) != 3 )); then
+            echo "::error::Published backup release must contain exactly three assets."
+            exit 1
+          fi
+
+          (
+            cd "$verify_dir"
+            sha256sum --check SHA256SUMS
+          )
+
+          release_json="$(gh release view "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isPrerelease,url)"
+          if [[ "$(jq -r '.isDraft' <<< "$release_json")" != "false" ]] ||
+             [[ "$(jq -r '.isPrerelease' <<< "$release_json")" != "false" ]]; then
+            echo "::error::Published backup release is not a final release."
+            exit 1
+          fi
+
+          echo "Verified encrypted production and test backup: $(jq -r '.url' <<< "$release_json")"
+
       - name: Apply release retention
+        id: retention
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -357,3 +417,155 @@ jobs:
               --cleanup-tag \
               --yes
           done
+
+  notify:
+    name: Email backup status
+    if: ${{ always() }}
+    needs: backup
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Send status email
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BACKUP_RESULT: ${{ needs.backup.result }}
+          RELEASE_TAG: ${{ needs.backup.outputs.release_tag }}
+          SMTP_HOST: ${{ vars.BACKUP_SMTP_HOST }}
+          SMTP_PORT: ${{ vars.BACKUP_SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.BACKUP_SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.BACKUP_SMTP_PASSWORD }}
+          NOTIFICATION_EMAIL: ${{ vars.BACKUP_NOTIFICATION_EMAIL }}
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import html
+          import json
+          import os
+          import smtplib
+          import ssl
+          import urllib.request
+          from datetime import datetime, timezone
+          from email.message import EmailMessage
+          from email.utils import formataddr
+          from zoneinfo import ZoneInfo
+
+          required = [
+              "GH_TOKEN",
+              "BACKUP_RESULT",
+              "SMTP_HOST",
+              "SMTP_PORT",
+              "SMTP_USERNAME",
+              "SMTP_PASSWORD",
+              "NOTIFICATION_EMAIL",
+              "GITHUB_REPOSITORY",
+              "GITHUB_RUN_ID",
+              "GITHUB_SERVER_URL",
+          ]
+          missing = [name for name in required if not os.environ.get(name, "").strip()]
+          if missing:
+              raise RuntimeError("Missing email configuration: " + ", ".join(missing))
+
+          result = os.environ["BACKUP_RESULT"].strip().lower()
+          is_success = result == "success"
+          status = "OK" if is_success else "FEJL"
+          repository = os.environ["GITHUB_REPOSITORY"]
+          run_id = os.environ["GITHUB_RUN_ID"]
+          run_url = f'{os.environ["GITHUB_SERVER_URL"]}/{repository}/actions/runs/{run_id}'
+          release_tag = os.environ.get("RELEASE_TAG", "").strip()
+          release_url = (
+              f'{os.environ["GITHUB_SERVER_URL"]}/{repository}/releases/tag/{release_tag}'
+              if release_tag
+              else ""
+          )
+
+          request = urllib.request.Request(
+              f"https://api.github.com/repos/{repository}/actions/runs/{run_id}/jobs?per_page=100",
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f'Bearer {os.environ["GH_TOKEN"]}',
+                  "User-Agent": "cafelif-backup-notifier",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              },
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              jobs = json.load(response).get("jobs", [])
+
+          backup_jobs = [job for job in jobs if job.get("name") == "Pull, encrypt and publish backup"]
+          steps = backup_jobs[0].get("steps", []) if backup_jobs else []
+          step_lines = [
+              f'- {step.get("name", "Ukendt trin")}: {step.get("conclusion") or step.get("status") or "ukendt"}'
+              for step in steps
+          ]
+          if not step_lines:
+              step_lines = ["- Trindetaljer kunne ikke hentes fra GitHub Actions."]
+
+          local_time = datetime.now(timezone.utc).astimezone(ZoneInfo("Europe/Copenhagen"))
+          trigger = os.environ.get("GITHUB_EVENT_NAME", "ukendt")
+          summary = (
+              "Produktionen og testmiljøet er hentet, databaserne er eksporteret, "
+              "begge snapshots er krypteret, uploadet og read-back-verificeret."
+              if is_success
+              else "Backupen blev ikke fuldført og verificeret. Se de konkrete trinstatusser nedenfor."
+          )
+
+          text_lines = [
+              f"Café LIF natbackup: {status}",
+              "",
+              summary,
+              "",
+              f"Tidspunkt: {local_time:%Y-%m-%d %H:%M:%S %Z}",
+              f"Udløser: {trigger}",
+              f"GitHub-status: {result}",
+              f"Workflow: {run_url}",
+          ]
+          if release_url:
+              text_lines.append(f"Backup-release: {release_url}")
+          text_lines.extend(["", "Trinstatus:", *step_lines])
+          text_body = "\n".join(text_lines)
+
+          step_items = "".join(f"<li>{html.escape(line[2:])}</li>" for line in step_lines)
+          release_html = (
+              f'<p><strong>Backup-release:</strong> <a href="{html.escape(release_url)}">{html.escape(release_tag)}</a></p>'
+              if release_url
+              else ""
+          )
+          html_body = f"""<!doctype html>
+          <html lang="da"><body>
+            <h1>Café LIF natbackup: {status}</h1>
+            <p>{html.escape(summary)}</p>
+            <p><strong>Tidspunkt:</strong> {local_time:%Y-%m-%d %H:%M:%S %Z}<br>
+               <strong>Udløser:</strong> {html.escape(trigger)}<br>
+               <strong>GitHub-status:</strong> {html.escape(result)}</p>
+            <p><strong>Workflow:</strong> <a href="{html.escape(run_url)}">Vis GitHub Actions-kørsel</a></p>
+            {release_html}
+            <h2>Trinstatus</h2>
+            <ul>{step_items}</ul>
+          </body></html>"""
+
+          message = EmailMessage()
+          message["Subject"] = f"[Café LIF natbackup] {status} - {local_time:%Y-%m-%d}"
+          message["From"] = formataddr(("Café LIF backup", os.environ["SMTP_USERNAME"]))
+          message["To"] = os.environ["NOTIFICATION_EMAIL"]
+          message.set_content(text_body)
+          message.add_alternative(html_body, subtype="html")
+
+          port = int(os.environ["SMTP_PORT"])
+          if not 1 <= port <= 65535:
+              raise ValueError("SMTP port must be between 1 and 65535")
+
+          context = ssl.create_default_context()
+          with smtplib.SMTP(os.environ["SMTP_HOST"], port, timeout=30) as smtp:
+              smtp.ehlo()
+              smtp.starttls(context=context)
+              smtp.ehlo()
+              smtp.login(os.environ["SMTP_USERNAME"], os.environ["SMTP_PASSWORD"])
+              smtp.send_message(message)
+
+          print(f"Status email accepted by SMTP server for {os.environ['NOTIFICATION_EMAIL']}.")
+          PY
