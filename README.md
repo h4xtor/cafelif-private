@@ -12,6 +12,8 @@ Dette private repository indeholder kun backupautomatiseringen. Livefiler, SQL-d
 - De publicerede releasefiler downloades igen og SHA-256-verificeres, før backupen markeres som gennemført.
 - De nyeste 30 komplette backupreleases bevares.
 - Efter hver kørsel sender en separat status-job en mail med succes eller fejl og konkrete trinstatusser.
+
+Ved en kontrolleret fejlmail-test kan workflowet startes manuelt med inputtet `simulate_failure=true`. Testen stopper før filer og databaser hentes og ændrer ingen backupdata.
 - Repositoryets Git-historik indeholder ikke et læsbart spejl af livekoden.
 
 ## Nødvendig GitHub-konfiguration

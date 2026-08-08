@@ -2,6 +2,12 @@ name: Backup Simply production and test
 
 on:
   workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: "Test failure notification without creating a backup"
+        required: false
+        default: false
+        type: boolean
   schedule:
     - cron: "0 3 * * *"
       timezone: "Europe/Copenhagen"
@@ -101,6 +107,13 @@ jobs:
           fi
 
           echo "retention_count=$retention" >> "$GITHUB_OUTPUT"
+
+      - name: Run manual failure notification drill
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_failure }}
+        shell: bash
+        run: |
+          echo "::error::Intentional failure notification drill. No backup data was changed."
+          exit 1
 
       - name: Install backup tools
         id: tools
