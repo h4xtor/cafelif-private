@@ -26,7 +26,7 @@ Repository Variables:
 - `PROD_REMOTE_PATH`, `TEST_REMOTE_PATH`
 - `PROD_DB_HOST`, `PROD_DB_PORT`, `PROD_DB_NAME`, `PROD_DB_USER`
 - `TEST_DB_HOST`, `TEST_DB_PORT`, `TEST_DB_NAME`, `TEST_DB_USER`
-- `BACKUP_SMTP_HOST`, `BACKUP_SMTP_PORT`
+- `BACKUP_SMTP_HOST`, `BACKUP_SMTP_PORT`, `BACKUP_FROM_EMAIL`
 - `BACKUP_NOTIFICATION_EMAIL`
 
 GitHub Actions skal bruge `smtp.simply.com` på port `587` med STARTTLS. `websmtp.simply.com` virker kun fra Simplys egne webservere og må ikke bruges af GitHub-runneren.
