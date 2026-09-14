@@ -419,9 +419,10 @@ jobs:
             gh release list \
               --repo "$GITHUB_REPOSITORY" \
               --limit 100 \
-              --json tagName,createdAt \
-              --jq 'sort_by(.createdAt) | reverse | .[].tagName' |
-              grep '^backup-' || true
+              --json tagName \
+              --jq '.[].tagName' |
+              grep -E '^backup-[0-9]{8}T[0-9]{6}Z$' |
+              LC_ALL=C sort -r || true
           )
 
           for ((index=RETENTION_COUNT; index<${#tags[@]}; index++)); do
