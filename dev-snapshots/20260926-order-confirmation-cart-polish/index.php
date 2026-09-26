@@ -116,7 +116,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..800;1,300..800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="style.css?v=26">
+  <link rel="stylesheet" href="style.css?v=28">
 
   <script type="application/ld+json">
   {
@@ -671,7 +671,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <div class="cart-panel__inner">
               <div class="cart-panel__head">
                 <div>
-                  <p class="cart-panel__kicker">Bestil direkte</p>
                   <h3><i class="fa-solid fa-bag-shopping" aria-hidden="true"></i> Din bestilling</h3>
                 </div>
                 <div class="cart-panel__head-actions">
@@ -679,7 +678,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                   <button class="cart-panel__close" data-cart-close type="button" aria-label="Luk bestilling"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
                 </div>
               </div>
-              <p class="cart-panel__help">1. Din kurv → 2. Dine oplysninger → 3. Send bestilling. Vi kontakter dig for at bekræfte aftalen.</p>
+              <ol class="cart-panel__steps" aria-label="Sådan bestiller du">
+                <li><span>1</span>Vælg mad</li>
+                <li><span>2</span>Dine oplysninger</li>
+                <li><span>3</span>Send bestilling</li>
+              </ol>
+              <h4 class="cart-panel__section-title">Din kurv</h4>
               <div class="cart-panel__lines" data-cart-lines></div>
               <p class="cart-panel__empty" data-cart-empty><i class="fa-solid fa-plus" aria-hidden="true"></i> Vælg retter fra menuen, så vises de her.</p>
               <div class="cart-panel__total">
@@ -690,10 +694,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
               <form class="cart-order-form" id="cart-order-form" method="post" action="<?= h(base_url('/actions/order.php')) ?>" data-cart-order-form novalidate>
                 <?= csrf_field() ?>
                 <input type="hidden" name="cart" id="cart-json" value="">
-                <div class="cart-order-form__intro">
-                  <strong>Dine oplysninger</strong>
-                  <span>Navn og telefon er nødvendige. E-mail kræves kun, hvis du ønsker mailbekræftelse.</span>
-                </div>
+                <div class="cart-order-form__intro"><strong>Dine oplysninger</strong><span>Vi ringer og bekræfter din bestilling.</span></div>
                 <label><span>Dit navn *</span><input type="text" name="name" autocomplete="name" required placeholder="Skriv dit navn"></label>
                 <label><span>Telefon *</span><input type="tel" name="phone" autocomplete="tel" required placeholder="Skriv telefonnummer"></label>
                 <label><span>E-mail</span><input type="email" name="email" autocomplete="email" placeholder="din@email.dk" data-confirmation-email></label>
@@ -705,7 +706,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 <label><span>Besked til Café LIF</span><textarea name="message" id="cart-note" data-cart-note rows="3" placeholder="Allergier, ønsket afhentning eller særlige ønsker..."></textarea></label>
                 <div class="cart-panel__actions">
                   <button class="btn btn--outline btn--sm" data-cart-clear type="button">Ryd</button>
-                  <button class="btn btn--clay btn--full" type="submit"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Send bestilling</button>
+                  <button class="btn btn--clay btn--full" type="submit"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Send bestilling <span class="cart-panel__button-total" data-cart-button-total>0 kr.</span></button>
                 </div>
                 <p class="cart-order-form__note" data-cart-status>Bestillingen sendes direkte til Café LIFs adminside. Vi ringer og bekræfter aftalen.</p>
               </form>
@@ -1059,6 +1060,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
   </button>
 
-  <script src="app.js?v=27"></script>
+  <script src="app.js?v=28"></script>
 </body>
 </html>

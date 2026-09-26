@@ -344,6 +344,7 @@
     const fabCount = qs('[data-cart-fab-count]');
     const fabLabel = qs('[data-cart-fab-label]');
     const totalEl = qs('[data-cart-total]', root);
+    const buttonTotalEl = qs('[data-cart-button-total]', root);
     const noteEl = qs('[data-cart-note]', root);
     const panel = qs('#cart-panel');
     const fab = qs('#cart-fab');
@@ -379,10 +380,11 @@
         const line = document.createElement('div');
         line.className = 'order-line';
         line.innerHTML = `
-          <div>
+          <div class="order-line__description">
             <strong>${escapeHtml(item.name)}</strong>
-            <small>${item.price > 0 ? `${fmt.format(item.price)} × ${item.qty}${item.unit === 'person' ? (item.qty === 1 ? ' person' : ' personer') : ''}` : `${escapeHtml(item.priceLabel)}${item.unit === 'person' ? ` · ${item.qty} ${item.qty === 1 ? 'person' : 'personer'}` : ''}`}</small>
+            <small>${item.price > 0 ? `${fmt.format(item.price)} pr. ${item.unit === 'person' ? 'person' : 'stk.'}` : escapeHtml(item.priceLabel)}</small>
           </div>
+          <strong class="order-line__subtotal">${item.price > 0 ? fmt.format(item.price * item.qty) : escapeHtml(item.priceLabel)}</strong>
           <div class="order-line__controls">
             <button type="button" data-dec="${item.id}" aria-label="Fjern én">−</button>
             <output>${item.qty}</output>
@@ -403,6 +405,7 @@
       const sum = entries.reduce((s, i) => s + i.price * i.qty, 0);
       const totalLabel = sum > 0 ? fmt.format(sum) : '0 kr.';
       if (totalEl) totalEl.textContent = entries.length ? totalLabel : '0 kr.';
+      if (buttonTotalEl) buttonTotalEl.textContent = entries.length ? totalLabel : '0 kr.';
       if (fabLabel) fabLabel.textContent = entries.length ? `${label} · ${totalLabel}` : 'Vælg retter med plus';
       if (fab) fab.classList.toggle('has-items', qty > 0);
     };
