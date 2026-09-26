@@ -1,0 +1,23 @@
+Local validation:
+PASS  node --check C:\CafeLIF\dev\app.js
+PASS  Static inspection: mail call follows database commit; Test recipient guard uses /test path or local dev directory.
+PASS  php -l index.php; php -l actions/order.php; php -l includes/mailer.php; php -l admin/orders.php (PHP 8.4.22 via WSL)
+NOT RUN  Test database migration and browser/SMTP checks (no Test deploy performed)
+
+Manual Test cases (all pending):
+1. Empty cart cannot submit.
+2. Checked confirmation + empty email gives a clear error.
+3. Checked confirmation + invalid email gives a clear error.
+4. Checked confirmation + valid email saves order; mail goes to test_recipient, subject begins [TEST], body shows original email.
+5. Unchecked confirmation + empty email saves order.
+6. Unchecked confirmation + invalid entered email gives an error.
+7. Unavailable SMTP leaves order in admin and shows the mail failure in success state and status log.
+8. Success shows order number.
+9. Success accurately reports sent, failed or declined confirmation.
+10. Cart lines and total match server calculation, including unavailable or changed products.
+11. Mobile sticky cart and plus/minus still work.
+12. Admin can view the new order.
+13. Order status lookup by mobile still works.
+14. Meeting catering still works.
+15. Regular and XL variants still work.
+

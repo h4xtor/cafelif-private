@@ -1,0 +1,366 @@
+diff --git "a/C:\\CafeLIF\\prod\\public_html260926\\.htaccess" "b/C:\\CafeLIF\\dev\\.htaccess"
+index e0aff0a..edb776a 100644
+--- "a/C:\\CafeLIF\\prod\\public_html260926\\.htaccess"
++++ "b/C:\\CafeLIF\\dev\\.htaccess"
+@@ -8,7 +8,7 @@ DirectoryIndex index.php
+   Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+ </IfModule>
+ 
+-<FilesMatch "^(config\.local\.php|.*\.sql|.*\.md)$">
++<FilesMatch "^(config\.local\.php|config\.mail\.local\.php|.*\.sql|.*\.md)$">
+   Require all denied
+ </FilesMatch>
+ 
+diff --git "a/C:\\CafeLIF\\prod\\public_html260926\\index.php" "b/C:\\CafeLIF\\dev\\index.php"
+index 680d011..4d2f4de 100644
+--- "a/C:\\CafeLIF\\prod\\public_html260926\\index.php"
++++ "b/C:\\CafeLIF\\dev\\index.php"
+@@ -116,7 +116,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..800;1,300..800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+-  <link rel="stylesheet" href="style.css?v=25">
++  <link rel="stylesheet" href="style.css?v=26">
+ 
+   <script type="application/ld+json">
+   {
+@@ -679,7 +679,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+                   <button class="cart-panel__close" data-cart-close type="button" aria-label="Luk bestilling"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                 </div>
+               </div>
+-              <p class="cart-panel__help">Vælg retter med plus-knappen. Når du sender bestillingen, lander den direkte hos Café LIF, og vi kontakter dig for at bekræfte.</p>
++              <p class="cart-panel__help">1. Din kurv → 2. Dine oplysninger → 3. Send bestilling. Vi kontakter dig for at bekræfte aftalen.</p>
+               <div class="cart-panel__lines" data-cart-lines></div>
+               <p class="cart-panel__empty" data-cart-empty><i class="fa-solid fa-plus" aria-hidden="true"></i> Vælg retter fra menuen, så vises de her.</p>
+               <div class="cart-panel__total">
+@@ -687,16 +687,17 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+                 <strong data-cart-total>0 kr.</strong>
+               </div>
+ 
+-              <form class="cart-order-form" id="cart-order-form" method="post" action="<?= h(base_url('/actions/order.php')) ?>" data-cart-order-form>
++              <form class="cart-order-form" id="cart-order-form" method="post" action="<?= h(base_url('/actions/order.php')) ?>" data-cart-order-form novalidate>
+                 <?= csrf_field() ?>
+                 <input type="hidden" name="cart" id="cart-json" value="">
+                 <div class="cart-order-form__intro">
+                   <strong>Dine oplysninger</strong>
+-                  <span>Navn og telefon er nok. E-mail, dato og besked er valgfrit.</span>
++                  <span>Navn og telefon er nødvendige. E-mail kræves kun, hvis du ønsker mailbekræftelse.</span>
+                 </div>
+                 <label><span>Dit navn *</span><input type="text" name="name" autocomplete="name" required placeholder="Skriv dit navn"></label>
+                 <label><span>Telefon *</span><input type="tel" name="phone" autocomplete="tel" required placeholder="Skriv telefonnummer"></label>
+-                <label><span>E-mail <small>valgfrit</small></span><input type="email" name="email" autocomplete="email" placeholder="Skriv e-mail hvis du ønsker"></label>
++                <label><span>E-mail</span><input type="email" name="email" autocomplete="email" placeholder="din@email.dk" data-confirmation-email></label>
++                <label class="cart-order-form__mail-choice"><input type="checkbox" name="confirmation_email_requested" value="1" checked data-confirmation-choice><span>Send ordrebekræftelse til min e-mail<small>Vi sender kun en bekræftelse på denne ordre.</small></span></label>
+                 <div class="cart-order-form__grid">
+                   <label><span>Ønsket dato</span><input type="date" name="date"></label>
+                   <label><span>Ønsket tid</span><input type="time" name="time"></label>
+@@ -1058,6 +1059,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+     <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
+   </button>
+ 
+-  <script src="app.js?v=25"></script>
++  <script src="app.js?v=26"></script>
+ </body>
+-</html>
+\ No newline at end of file
++</html>
+diff --git "a/C:\\CafeLIF\\prod\\public_html260926\\app.js" "b/C:\\CafeLIF\\dev\\app.js"
+index 192aab8..61d6adf 100644
+--- "a/C:\\CafeLIF\\prod\\public_html260926\\app.js"
++++ "b/C:\\CafeLIF\\dev\\app.js"
+@@ -348,8 +348,7 @@
+     const panel = qs('#cart-panel');
+     const fab = qs('#cart-fab');
+ 
+-    // Bestillingskurven er fjernet fra denne løsning. Hvis de gamle
+-    // cart-elementer ikke findes på siden, springer scriptet roligt videre.
++    // Andre sider uden kurv skal fortsat kunne bruge samme script.
+     if (!lines || !empty || !qsa('[data-cart-add]', root).length) return;
+ 
+     const getData = (card, trigger = null) => {
+@@ -478,6 +477,11 @@
+ 
+     const orderForm = qs('[data-cart-order-form]', root);
+     const orderStatus = qs('[data-cart-status]', root);
++    const confirmationChoice = qs('[data-confirmation-choice]', orderForm);
++    const confirmationEmail = qs('[data-confirmation-email]', orderForm);
++    const syncConfirmationEmail = () => { if (confirmationEmail) confirmationEmail.required = !!confirmationChoice?.checked; };
++    confirmationChoice?.addEventListener('change', syncConfirmationEmail);
++    syncConfirmationEmail();
+     const setOrderStatus = (type, html) => {
+       if (!orderStatus) return;
+       orderStatus.innerHTML = html;
+@@ -486,6 +490,25 @@
+     };
+ 
+     orderForm?.addEventListener('submit', async e => {
++      syncConfirmationEmail();
++      if (confirmationChoice?.checked && !confirmationEmail?.value.trim()) {
++        e.preventDefault();
++        setOrderStatus('error', 'Skriv din e-mailadresse for at få ordrebekræftelse, eller fjern fluebenet.');
++        confirmationEmail?.focus();
++        return;
++      }
++      if (confirmationEmail?.value.trim() && !confirmationEmail.checkValidity()) {
++        e.preventDefault();
++        setOrderStatus('error', 'Skriv en gyldig e-mailadresse.');
++        confirmationEmail.focus();
++        return;
++      }
++      if (!orderForm.checkValidity()) {
++        e.preventDefault();
++        setOrderStatus('error', 'Udfyld navn og telefon, og kontrollér dato og tidspunkt.');
++        orderForm.querySelector(':invalid')?.focus();
++        return;
++      }
+       const entries = [...cart.values()].filter(i => i.itemId);
+       const cartInput = qs('#cart-json', orderForm);
+       if (!entries.length) {
+@@ -530,13 +553,18 @@
+ 
+         const reference = escapeHtml(json.reference || json.phone || '');
+         const phone = escapeHtml(json.phone || 'dit mobilnummer');
++        const mailText = json.confirmation_email_requested
++          ? (json.customer_mail_sent ? `Vi har sendt en mailbekræftelse til ${escapeHtml(confirmationEmail?.value || '')}.` : 'Din ordre er gemt, men mailbekræftelsen kunne ikke sendes. Café LIF har stadig modtaget bestillingen.')
++          : 'Du har valgt ikke at få mailbekræftelse.';
+         setOrderStatus('success', `
+           <strong>Tak — bestillingen er sendt til Café LIF.</strong><br>
+-          Reference: <strong>${reference}</strong><br>
++          Dit ordrenummer er <strong>${reference}</strong><br>
++          ${mailText}<br>
+           Du kan følge status med mobilnummeret <strong>${phone}</strong> på knappen <strong>Tjek ordre</strong> på forsiden.
+         `);
+         cart.clear();
+         orderForm.reset();
++        syncConfirmationEmail();
+         updateUI();
+       } catch (err) {
+         setOrderStatus('error', escapeHtml(err.message || 'Bestillingen kunne ikke sendes. Prøv igen eller ring til Café LIF.'));
+@@ -854,4 +882,4 @@
+   document.readyState === 'loading'
+     ? document.addEventListener('DOMContentLoaded', boot)
+     : boot();
+-})();
+\ No newline at end of file
++})();
+diff --git "a/C:\\CafeLIF\\prod\\public_html260926\\style.css" "b/C:\\CafeLIF\\dev\\style.css"
+index baf24d5..a4eb825 100644
+--- "a/C:\\CafeLIF\\prod\\public_html260926\\style.css"
++++ "b/C:\\CafeLIF\\dev\\style.css"
+@@ -3055,3 +3055,10 @@ body.order-status-open{overflow:hidden}
+ .meeting-order__copy strong{font-size:1.05rem;color:var(--ink)}
+ .meeting-order__copy span{font-size:.86rem;line-height:1.5;color:var(--mist)}
+ .meeting-order .btn{justify-content:center}
++/* Order confirmation and checkout clarity. */
++.cart-order-form .cart-order-form__mail-choice{display:flex;align-items:flex-start;gap:.75rem;padding:1rem;border:1.5px solid rgba(200,103,58,.38);border-radius:16px;background:#fff9f5;cursor:pointer}
++.cart-order-form__mail-choice input{width:1.2rem;height:1.2rem;flex:none;margin:.08rem 0 0;accent-color:var(--clay)}
++.cart-order-form__mail-choice span{display:block;font-size:.9rem;line-height:1.35}
++.cart-order-form__mail-choice small{display:block;margin-top:.25rem;font-size:.76rem;font-weight:500;color:var(--mist)}
++.cart-order-form__note.is-error,.cart-order-form__note.is-success{padding:.8rem;border-radius:12px;background:#fff}
++.cart-panel__total{border-top:2px solid var(--clay);padding:1rem;background:#fff9f5;border-radius:14px}
+diff --git "a/C:\\CafeLIF\\prod\\public_html260926\\actions\\order.php" "b/C:\\CafeLIF\\dev\\actions\\order.php"
+index 7d2b63e..cd30e63 100644
+--- "a/C:\\CafeLIF\\prod\\public_html260926\\actions\\order.php"
++++ "b/C:\\CafeLIF\\dev\\actions\\order.php"
+@@ -2,6 +2,7 @@
+ declare(strict_types=1);
+ require dirname(__DIR__) . '/includes/bootstrap.php';
+ require dirname(__DIR__) . '/includes/front.php';
++require_once dirname(__DIR__) . '/includes/mailer.php';
+ 
+ function cafelif_order_is_ajax(): bool
+ {
+@@ -47,17 +48,21 @@ if (!rate_limit('order', 8, 600)) {
+ $name = trim((string)($_POST['name'] ?? ''));
+ $phone = trim((string)($_POST['phone'] ?? ''));
+ $email = trim((string)($_POST['email'] ?? ''));
++$confirmationRequested = filter_var($_POST['confirmation_email_requested'] ?? false, FILTER_VALIDATE_BOOLEAN);
+ $cart = json_decode((string)($_POST['cart'] ?? '[]'), true);
+ if ($name === '' || $phone === '' || !is_array($cart) || !$cart) {
+     cafelif_order_fail('Navn, telefon og mindst ét valg er påkrævet.');
+ }
++if (mb_strlen($name) < 2 || mb_strlen($name) > 160) cafelif_order_fail('Skriv dit navn med 2 til 160 tegn.');
++if ($confirmationRequested && $email === '') cafelif_order_fail('Skriv din e-mailadresse for at få ordrebekræftelse.');
++if ($email !== '' && (mb_strlen($email) > 190 || !filter_var($email, FILTER_VALIDATE_EMAIL))) cafelif_order_fail('Skriv en gyldig e-mailadresse.');
++if (count($cart) > 50) cafelif_order_fail('Bestillingen har for mange varelinjer. Kontakt Café LIF eller del den op.');
+ 
+ function order_phone_key(string $phone): string
+ {
+     $digits = preg_replace('/\D+/', '', $phone) ?? '';
+     if (str_starts_with($digits, '0045')) $digits = substr($digits, 4);
+-    if (strlen($digits) > 8 && str_starts_with($digits, '45')) $digits = substr($digits, 2);
+-    if (strlen($digits) > 8) $digits = substr($digits, -8);
++    if (strlen($digits) === 10 && str_starts_with($digits, '45')) $digits = substr($digits, 2);
+     return $digits;
+ }
+ 
+@@ -67,32 +72,49 @@ function cafelif_order_reference(): string
+ }
+ 
+ $phoneKey = order_phone_key($phone);
+-if (strlen($phoneKey) < 8) {
++if (strlen($phoneKey) !== 8) {
+     cafelif_order_fail('Skriv et gyldigt mobilnummer, så Café LIF kan bekræfte bestillingen.');
+ }
+ 
++$desiredDate = trim((string)($_POST['date'] ?? ''));
++$desiredTime = trim((string)($_POST['time'] ?? ''));
++$message = trim((string)($_POST['message'] ?? ''));
++if ($desiredDate !== '') {
++    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $desiredDate);
++    if (!$date || $date->format('Y-m-d') !== $desiredDate) cafelif_order_fail('Skriv en gyldig ønsket dato.');
++}
++if ($desiredTime !== '' && !preg_match('/^(?:[01]\\d|2[0-3]):[0-5]\\d$/', $desiredTime)) cafelif_order_fail('Skriv et gyldigt ønsket tidspunkt.');
++if (mb_strlen($message) > 5000) cafelif_order_fail('Beskeden må højst være 5.000 tegn.');
++
+ $pdo = db();
+ $pdo->beginTransaction();
++$committed = false;
+ try {
+     $validated = [];
+     $total = 0.0;
+-    $lookup = $pdo->prepare('SELECT id,title,slug,price,xl_price,is_available FROM menu_items WHERE id=?');
++    $seen = [];
++    $lookup = $pdo->prepare('SELECT m.id,m.title,m.slug,m.price,m.xl_price,m.is_available,c.is_active category_active FROM menu_items m JOIN menu_categories c ON c.id=m.category_id WHERE m.id=?');
+     foreach ($cart as $item) {
+-        $lookup->execute([(int)($item['id'] ?? 0)]);
++        if (!is_array($item) || (int)($item['id'] ?? 0) <= 0) throw new InvalidArgumentException('Bestillingen indeholder en ugyldig varelinje.');
++        $lookup->execute([(int)$item['id']]);
+         $row = $lookup->fetch();
+-        if (!$row) continue;
++        if (!$row) throw new InvalidArgumentException('En vare findes ikke længere. Opdater siden og vælg igen.');
+ 
+-        $qty = max(1, min(99, (int)($item['qty'] ?? 1)));
++        $qty = (int)($item['qty'] ?? 0);
++        if ($qty < 1 || $qty > 99) throw new InvalidArgumentException('Antallet skal være mellem 1 og 99 pr. vare.');
+         $size = strtolower(trim((string)($item['size'] ?? 'normal')));
+-        if (!in_array($size, ['normal', 'xl'], true)) $size = 'normal';
++        if (!in_array($size, ['normal', 'xl'], true)) throw new InvalidArgumentException('Ugyldig størrelse i bestillingen.');
++        $lineKey = $row['id'] . ':' . $size;
++        if (isset($seen[$lineKey])) throw new InvalidArgumentException('Samme vare står flere gange i bestillingen.');
++        $seen[$lineKey] = true;
+ 
+         $isMeeting = front_is_meeting_item($row);
+-        if (!$isMeeting && (int)($row['is_available'] ?? 0) !== 1) continue;
++        if ((int)($row['is_available'] ?? 0) !== 1 || (int)($row['category_active'] ?? 0) !== 1) throw new InvalidArgumentException('En vare kan ikke bestilles lige nu. Opdater siden og vælg igen.');
+         if ($isMeeting && ((string)setting('meeting_enabled', '1') === '0' || (string)setting('meeting_order_enabled', '1') === '0')) {
+             throw new InvalidArgumentException('Mødeforplejning kan ikke bestilles lige nu. Opdater siden eller kontakt Café LIF.');
+         }
+ 
+-        $normalPrice = (float)($row['price'] ?? 0);
++        $normalPrice = (float)($isMeeting ? setting('meeting_order_price', $row['price'] ?? 0) : ($row['price'] ?? 0));
+         $xlPrice = $isMeeting ? 0.0 : (float)($row['xl_price'] ?? 0);
+         if ($size === 'xl' && $xlPrice <= 0) {
+             throw new InvalidArgumentException('XL-størrelsen er ikke længere tilgængelig for ' . (string)$row['title'] . '. Opdater siden og vælg igen.');
+@@ -116,7 +138,7 @@ try {
+ 
+     // Kunden bruger mobilnummeret til statusopslag, men hver bestilling får også sin egen unikke reference.
+     // Det gør, at samme mobilnummer kan have flere samtidige eller fremtidige bestillinger uden forvirring.
+-    $stmt = $pdo->prepare('INSERT INTO orders(order_number,customer_name,phone,email,desired_date,desired_time,message,total_estimate) VALUES(?,?,?,?,?,?,?,?)');
++    $stmt = $pdo->prepare('INSERT INTO orders(order_number,customer_name,phone,email,desired_date,desired_time,message,total_estimate,confirmation_email_requested) VALUES(?,?,?,?,?,?,?,?,?)');
+     $saved = false;
+     $reference = '';
+     for ($try = 0; $try < 8 && !$saved; $try++) {
+@@ -124,10 +146,11 @@ try {
+         try {
+             $stmt->execute([
+                 $candidate, $name, $phone, $email ?: null,
+-                ($_POST['date'] ?? '') ?: null,
+-                ($_POST['time'] ?? '') ?: null,
+-                trim((string)($_POST['message'] ?? '')) ?: null,
+-                $total
++                $desiredDate ?: null,
++                $desiredTime ?: null,
++                $message ?: null,
++                $total,
++                $confirmationRequested ? 1 : 0
+             ]);
+             $reference = $candidate;
+             $saved = true;
+@@ -143,15 +166,86 @@ try {
+         $insert->execute([$orderId, $item['row']['id'], $item['item_name'], $item['qty'], $item['price']]);
+     }
+     $pdo->commit();
++    $committed = true;
+     log_event('order_submit');
+ 
++    $basePath = strtolower((string)(parse_url((string)($config['app']['base_url'] ?? ''), PHP_URL_PATH) ?: ''));
++    $isTest = str_contains($basePath, '/test') || basename(dirname(__DIR__)) === 'dev';
++    $environment = $isTest ? (basename(dirname(__DIR__)) === 'dev' ? 'dev' : 'test') : 'prod';
++    $mailConfig = [];
++    try { $mailConfig = cafelif_mail_config(); } catch (Throwable) { /* Ordren er allerede gemt. */ }
++    $testRecipient = trim((string)($mailConfig['test_recipient'] ?? ''));
++    $adminRecipient = trim((string)($mailConfig['admin_email'] ?? ''));
++    $recipient = $isTest ? $testRecipient : $email;
++    $subjectPrefix = $isTest ? '[TEST] ' : '';
++    $mailLines = [
++        'Café LIF' . ($isTest ? ' — TEST, ingen rigtig kundemail' : ''),
++        'Ordrenummer: ' . $reference,
++        'Navn: ' . $name,
++        'Telefon: ' . $phone,
++        'Email: ' . ($email ?: 'Ikke angivet'),
++        'Original kunde-email: ' . ($email ?: 'Ikke angivet'),
++        'Ønsket dato: ' . ($desiredDate ?: 'Ikke angivet'),
++        'Ønsket tidspunkt: ' . ($desiredTime ?: 'Ikke angivet'),
++        'Varer:',
++    ];
++    foreach ($validated as $item) {
++        $mailLines[] = $item['qty'] . ' × ' . $item['item_name'] . ' — ' . number_format((float)$item['price'], 2, ',', '.') . ' kr. pr. stk. — ' . number_format($item['qty'] * (float)$item['price'], 2, ',', '.') . ' kr.';
++    }
++    $mailLines[] = 'Totalestimat: ' . number_format($total, 2, ',', '.') . ' kr.';
++    if ($message !== '') $mailLines[] = 'Besked: ' . $message;
++    $mailLines[] = 'Tak for din bestilling. Café LIF kontakter dig ved spørgsmål.';
++    $mailText = implode("\n", $mailLines);
++    $mailHtml = '<div style="font-family:Arial,sans-serif;line-height:1.6;white-space:pre-line">' . htmlspecialchars($mailText, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</div>';
++    $customerMailSent = false;
++    $mailLog = static function (string $kind, string $actualRecipient, string $status, string $error = '') use ($reference, $environment, $confirmationRequested, $email): void {
++        $dir = dirname(__DIR__) . '/storage/logs';
++        if (!is_dir($dir)) @mkdir($dir, 0770, true);
++        $record = [
++            'timestamp' => date(DATE_ATOM), 'order_number' => $reference, 'environment' => $environment,
++            'kind' => $kind, 'confirmation_email_requested' => $confirmationRequested,
++            'original_customer_email' => $email, 'actual_recipient' => $actualRecipient,
++            'status' => $status, 'error' => $error,
++        ];
++        if (@file_put_contents($dir . '/order-mail.log', json_encode($record, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) . "\n", FILE_APPEND | LOCK_EX) === false) error_log('Café LIF mailstatus kunne ikke logges for ' . $reference);
++    };
++    $sendOrderMail = static function (string $kind, string $to, string $toName, string $subject, string $columnSent, string $columnError) use ($pdo, $orderId, $mailHtml, $mailText, $mailLog): bool {
++        $error = '';
++        try {
++            if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) throw new RuntimeException('Ingen gyldig modtager er konfigureret.');
++            send_cafelif_mail($to, $toName, $subject, $mailHtml, $mailText);
++        } catch (Throwable $e) {
++            $error = 'Mail kunne ikke sendes';
++            error_log('Café LIF ' . $kind . ' mailfejl for ' . $orderId . ': ' . $error);
++        }
++        try {
++            $pdo->prepare("UPDATE orders SET $columnSent=IF(?='',NOW(),NULL), $columnError=? WHERE id=?")->execute([$error, $error ?: null, $orderId]);
++        } catch (Throwable) { error_log('Café LIF mailstatus kunne ikke gemmes for ' . $orderId); }
++        $mailLog($kind, $to, $error === '' ? 'sent' : 'failed', $error);
++        return $error === '';
++    };
++    if ($confirmationRequested) {
++        $customerMailSent = $sendOrderMail('customer', $recipient, $name, $subjectPrefix . 'Ordrebekræftelse fra Café LIF – ' . $reference, 'customer_mail_sent_at', 'customer_mail_error');
++    }
++    if ($adminRecipient !== '') {
++        $sendOrderMail('admin', $isTest ? $testRecipient : $adminRecipient, 'Café LIF', $subjectPrefix . 'Ny bestilling hos Café LIF – ' . $reference, 'admin_mail_sent_at', 'admin_mail_error');
++    }
++
+     cafelif_order_respond([
+         'ok' => true,
+         'reference' => $reference,
+         'phone' => $phoneKey,
++        'confirmation_email_requested' => $confirmationRequested,
++        'customer_mail_sent' => $customerMailSent,
+         'message' => 'Bestillingen er sendt til Café LIF.',
+     ]);
+ } catch (Throwable $e) {
++    if ($committed) {
++        error_log('Café LIF mailbehandling fejlede efter gemt ordre ' . $reference);
++        cafelif_order_respond(['ok' => true, 'reference' => $reference, 'phone' => $phoneKey,
++            'confirmation_email_requested' => $confirmationRequested, 'customer_mail_sent' => false,
++            'message' => 'Bestillingen er gemt, men mailstatus kunne ikke bekræftes.']);
++    }
+     if ($pdo->inTransaction()) $pdo->rollBack();
+     if ($e instanceof InvalidArgumentException) {
+         cafelif_order_fail($e->getMessage(), 400);

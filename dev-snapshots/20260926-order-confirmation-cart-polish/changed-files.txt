@@ -1,0 +1,7 @@
+.htaccess
+index.php
+app.js
+style.css
+actions/order.php
+database/migrations/20260926_order_confirmation_email.sql
+storage/.htaccess
