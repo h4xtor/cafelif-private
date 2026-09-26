@@ -93,6 +93,8 @@ try {
     $validated = [];
     $total = 0.0;
     $seen = [];
+    $hasMeeting = false;
+    $hasRegular = false;
     $lookup = $pdo->prepare('SELECT m.id,m.title,m.slug,m.price,m.xl_price,m.is_available,c.is_active category_active FROM menu_items m JOIN menu_categories c ON c.id=m.category_id WHERE m.id=?');
     foreach ($cart as $item) {
         if (!is_array($item) || (int)($item['id'] ?? 0) <= 0) throw new InvalidArgumentException('Bestillingen indeholder en ugyldig varelinje.');
@@ -109,6 +111,8 @@ try {
         $seen[$lineKey] = true;
 
         $isMeeting = front_is_meeting_item($row);
+        $hasMeeting = $hasMeeting || $isMeeting;
+        $hasRegular = $hasRegular || !$isMeeting;
         if ((int)($row['is_available'] ?? 0) !== 1 || (int)($row['category_active'] ?? 0) !== 1) throw new InvalidArgumentException('En vare kan ikke bestilles lige nu. Opdater siden og vælg igen.');
         if ($isMeeting && ((string)setting('meeting_enabled', '1') === '0' || (string)setting('meeting_order_enabled', '1') === '0')) {
             throw new InvalidArgumentException('Mødeforplejning kan ikke bestilles lige nu. Opdater siden eller kontakt Café LIF.');
@@ -135,6 +139,7 @@ try {
         $total += $price * $qty;
     }
     if (!$validated) throw new InvalidArgumentException('Ingen gyldige valg blev fundet. Opdater siden og prøv igen.');
+    $orderType = $hasMeeting && $hasRegular ? 'Blandet' : ($hasMeeting ? 'Mødeforplejning' : 'Takeaway');
 
     // Kunden bruger mobilnummeret til statusopslag, men hver bestilling får også sin egen unikke reference.
     // Det gør, at samme mobilnummer kan have flere samtidige eller fremtidige bestillinger uden forvirring.
@@ -185,6 +190,7 @@ try {
         'Telefon: ' . $phone,
         'Email: ' . ($email ?: 'Ikke angivet'),
         'Original kunde-email: ' . ($email ?: 'Ikke angivet'),
+        'Ordretype: ' . $orderType,
         'Ønsket dato: ' . ($desiredDate ?: 'Ikke angivet'),
         'Ønsket tidspunkt: ' . ($desiredTime ?: 'Ikke angivet'),
         'Varer:',

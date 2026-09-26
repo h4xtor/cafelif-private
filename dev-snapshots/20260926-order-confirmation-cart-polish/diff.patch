@@ -159,7 +159,7 @@ index baf24d5..a4eb825 100644
 +.cart-order-form__note.is-error,.cart-order-form__note.is-success{padding:.8rem;border-radius:12px;background:#fff}
 +.cart-panel__total{border-top:2px solid var(--clay);padding:1rem;background:#fff9f5;border-radius:14px}
 diff --git "a/C:\\CafeLIF\\prod\\public_html260926\\actions\\order.php" "b/C:\\CafeLIF\\dev\\actions\\order.php"
-index 7d2b63e..cd30e63 100644
+index 7d2b63e..9ba3df9 100644
 --- "a/C:\\CafeLIF\\prod\\public_html260926\\actions\\order.php"
 +++ "b/C:\\CafeLIF\\dev\\actions\\order.php"
 @@ -2,6 +2,7 @@
@@ -194,7 +194,7 @@ index 7d2b63e..cd30e63 100644
      return $digits;
  }
  
-@@ -67,32 +72,49 @@ function cafelif_order_reference(): string
+@@ -67,32 +72,53 @@ function cafelif_order_reference(): string
  }
  
  $phoneKey = order_phone_key($phone);
@@ -221,6 +221,8 @@ index 7d2b63e..cd30e63 100644
      $total = 0.0;
 -    $lookup = $pdo->prepare('SELECT id,title,slug,price,xl_price,is_available FROM menu_items WHERE id=?');
 +    $seen = [];
++    $hasMeeting = false;
++    $hasRegular = false;
 +    $lookup = $pdo->prepare('SELECT m.id,m.title,m.slug,m.price,m.xl_price,m.is_available,c.is_active category_active FROM menu_items m JOIN menu_categories c ON c.id=m.category_id WHERE m.id=?');
      foreach ($cart as $item) {
 -        $lookup->execute([(int)($item['id'] ?? 0)]);
@@ -242,6 +244,8 @@ index 7d2b63e..cd30e63 100644
  
          $isMeeting = front_is_meeting_item($row);
 -        if (!$isMeeting && (int)($row['is_available'] ?? 0) !== 1) continue;
++        $hasMeeting = $hasMeeting || $isMeeting;
++        $hasRegular = $hasRegular || !$isMeeting;
 +        if ((int)($row['is_available'] ?? 0) !== 1 || (int)($row['category_active'] ?? 0) !== 1) throw new InvalidArgumentException('En vare kan ikke bestilles lige nu. Opdater siden og vælg igen.');
          if ($isMeeting && ((string)setting('meeting_enabled', '1') === '0' || (string)setting('meeting_order_enabled', '1') === '0')) {
              throw new InvalidArgumentException('Mødeforplejning kan ikke bestilles lige nu. Opdater siden eller kontakt Café LIF.');
@@ -252,7 +256,11 @@ index 7d2b63e..cd30e63 100644
          $xlPrice = $isMeeting ? 0.0 : (float)($row['xl_price'] ?? 0);
          if ($size === 'xl' && $xlPrice <= 0) {
              throw new InvalidArgumentException('XL-størrelsen er ikke længere tilgængelig for ' . (string)$row['title'] . '. Opdater siden og vælg igen.');
-@@ -116,7 +138,7 @@ try {
+@@ -113,10 +139,11 @@ try {
+         $total += $price * $qty;
+     }
+     if (!$validated) throw new InvalidArgumentException('Ingen gyldige valg blev fundet. Opdater siden og prøv igen.');
++    $orderType = $hasMeeting && $hasRegular ? 'Blandet' : ($hasMeeting ? 'Mødeforplejning' : 'Takeaway');
  
      // Kunden bruger mobilnummeret til statusopslag, men hver bestilling får også sin egen unikke reference.
      // Det gør, at samme mobilnummer kan have flere samtidige eller fremtidige bestillinger uden forvirring.
@@ -261,7 +269,7 @@ index 7d2b63e..cd30e63 100644
      $saved = false;
      $reference = '';
      for ($try = 0; $try < 8 && !$saved; $try++) {
-@@ -124,10 +146,11 @@ try {
+@@ -124,10 +151,11 @@ try {
          try {
              $stmt->execute([
                  $candidate, $name, $phone, $email ?: null,
@@ -277,7 +285,7 @@ index 7d2b63e..cd30e63 100644
              ]);
              $reference = $candidate;
              $saved = true;
-@@ -143,15 +166,86 @@ try {
+@@ -143,15 +171,87 @@ try {
          $insert->execute([$orderId, $item['row']['id'], $item['item_name'], $item['qty'], $item['price']]);
      }
      $pdo->commit();
@@ -300,6 +308,7 @@ index 7d2b63e..cd30e63 100644
 +        'Telefon: ' . $phone,
 +        'Email: ' . ($email ?: 'Ikke angivet'),
 +        'Original kunde-email: ' . ($email ?: 'Ikke angivet'),
++        'Ordretype: ' . $orderType,
 +        'Ønsket dato: ' . ($desiredDate ?: 'Ikke angivet'),
 +        'Ønsket tidspunkt: ' . ($desiredTime ?: 'Ikke angivet'),
 +        'Varer:',
