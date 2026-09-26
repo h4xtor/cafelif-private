@@ -25,3 +25,4 @@ Live Test evidence: homepage/menu and checkout rendered; blank and invalid reque
 Visual QA found missing Prod menu images after the Test database refresh. Ten newer non-secret uploads were copied to Test; existing Test uploads were retained. A subsequent browser screenshot showed the Tuesday dish image. Final read-only counts: Prod 83 orders and no confirmation column; Test 86 orders with confirmation column. The three extra Test orders are identified above.
 
 
+Follow-up: Test admin order cards and order details now display whether the customer requested mail confirmation. The detail also distinguishes sent, failed, and unconfirmed mail. Live Test verified both Yes (order 88, test mail sent) and No (order 86).
