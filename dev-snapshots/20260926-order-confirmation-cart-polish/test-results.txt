@@ -22,3 +22,8 @@ Manual Test cases (all pending):
 15. Regular and XL variants still work.
 
 
+
+PASS  Test's copied Prod menu images render after uploading ten missing media files.
+PASS  Prod boundary check: 83 orders and no confirmation column; Test: 86 orders and confirmation column.
+NOT RUN  Authenticated admin order view pending user login.
+
