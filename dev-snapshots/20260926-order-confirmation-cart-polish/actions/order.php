@@ -179,7 +179,9 @@ try {
     $environment = $isTest ? (basename(dirname(__DIR__)) === 'dev' ? 'dev' : 'test') : 'prod';
     $mailConfig = [];
     try { $mailConfig = cafelif_mail_config(); } catch (Throwable) { /* Ordren er allerede gemt. */ }
+    // I Test går mail kun til en eksplicit testmodtager eller caféens egen SMTP-afsender.
     $testRecipient = trim((string)($mailConfig['test_recipient'] ?? ''));
+    if ($testRecipient === '') $testRecipient = trim((string)($mailConfig['from_email'] ?? ''));
     $adminRecipient = trim((string)($mailConfig['admin_email'] ?? ''));
     $recipient = $isTest ? $testRecipient : $email;
     $subjectPrefix = $isTest ? '[TEST] ' : '';
@@ -243,6 +245,7 @@ try {
         'phone' => $phoneKey,
         'confirmation_email_requested' => $confirmationRequested,
         'customer_mail_sent' => $customerMailSent,
+        'test_mode' => $isTest,
         'message' => 'Bestillingen er sendt til Café LIF.',
     ]);
 } catch (Throwable $e) {
@@ -250,6 +253,7 @@ try {
         error_log('Café LIF mailbehandling fejlede efter gemt ordre ' . $reference);
         cafelif_order_respond(['ok' => true, 'reference' => $reference, 'phone' => $phoneKey,
             'confirmation_email_requested' => $confirmationRequested, 'customer_mail_sent' => false,
+            'test_mode' => true,
             'message' => 'Bestillingen er gemt, men mailstatus kunne ikke bekræftes.']);
     }
     if ($pdo->inTransaction()) $pdo->rollBack();

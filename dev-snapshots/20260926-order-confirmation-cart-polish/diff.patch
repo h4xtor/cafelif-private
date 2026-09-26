@@ -12,7 +12,7 @@ index e0aff0a..edb776a 100644
  </FilesMatch>
  
 diff --git "a/C:\\CafeLIF\\prod\\public_html260926\\index.php" "b/C:\\CafeLIF\\dev\\index.php"
-index 680d011..4d2f4de 100644
+index 680d011..bfafe88 100644
 --- "a/C:\\CafeLIF\\prod\\public_html260926\\index.php"
 +++ "b/C:\\CafeLIF\\dev\\index.php"
 @@ -116,7 +116,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
@@ -24,6 +24,15 @@ index 680d011..4d2f4de 100644
  
    <script type="application/ld+json">
    {
+@@ -381,7 +381,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+       <p>Indtast det mobilnummer du brugte ved bestillingen. Du kan se dine seneste bestillinger og følge status på hver ordre her.</p>
+       <form class="order-status-form" action="actions/order-status.php" method="post" data-order-status-form>
+         <label>
+-          <span>Mobilnummer / ordrenummer</span>
++          <span>Mobilnummer</span>
+           <input type="tel" name="phone" inputmode="tel" autocomplete="tel" placeholder="fx 12 34 56 78" required>
+         </label>
+         <button class="btn btn--clay btn--full" type="submit">Se ordrestatus</button>
 @@ -679,7 +679,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                    <button class="cart-panel__close" data-cart-close type="button" aria-label="Luk bestilling"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
                  </div>
@@ -59,13 +68,13 @@ index 680d011..4d2f4de 100644
    </button>
  
 -  <script src="app.js?v=25"></script>
-+  <script src="app.js?v=26"></script>
++  <script src="app.js?v=27"></script>
  </body>
 -</html>
 \ No newline at end of file
 +</html>
 diff --git "a/C:\\CafeLIF\\prod\\public_html260926\\app.js" "b/C:\\CafeLIF\\dev\\app.js"
-index 192aab8..61d6adf 100644
+index 192aab8..253104d 100644
 --- "a/C:\\CafeLIF\\prod\\public_html260926\\app.js"
 +++ "b/C:\\CafeLIF\\dev\\app.js"
 @@ -348,8 +348,7 @@
@@ -116,12 +125,14 @@ index 192aab8..61d6adf 100644
        const entries = [...cart.values()].filter(i => i.itemId);
        const cartInput = qs('#cart-json', orderForm);
        if (!entries.length) {
-@@ -530,13 +553,18 @@
+@@ -530,13 +553,20 @@
  
          const reference = escapeHtml(json.reference || json.phone || '');
          const phone = escapeHtml(json.phone || 'dit mobilnummer');
 +        const mailText = json.confirmation_email_requested
-+          ? (json.customer_mail_sent ? `Vi har sendt en mailbekræftelse til ${escapeHtml(confirmationEmail?.value || '')}.` : 'Din ordre er gemt, men mailbekræftelsen kunne ikke sendes. Café LIF har stadig modtaget bestillingen.')
++          ? (json.customer_mail_sent
++            ? (json.test_mode ? `Test-mail er sendt til Café LIFs testmodtager. Oprindelig kunde-email: ${escapeHtml(confirmationEmail?.value || '')}.` : `Vi har sendt en mailbekræftelse til ${escapeHtml(confirmationEmail?.value || '')}.`)
++            : 'Din ordre er gemt, men mailbekræftelsen kunne ikke sendes. Café LIF har stadig modtaget bestillingen.')
 +          : 'Du har valgt ikke at få mailbekræftelse.';
          setOrderStatus('success', `
            <strong>Tak — bestillingen er sendt til Café LIF.</strong><br>
@@ -136,7 +147,7 @@ index 192aab8..61d6adf 100644
          updateUI();
        } catch (err) {
          setOrderStatus('error', escapeHtml(err.message || 'Bestillingen kunne ikke sendes. Prøv igen eller ring til Café LIF.'));
-@@ -854,4 +882,4 @@
+@@ -854,4 +884,4 @@
    document.readyState === 'loading'
      ? document.addEventListener('DOMContentLoaded', boot)
      : boot();
@@ -159,7 +170,7 @@ index baf24d5..a4eb825 100644
 +.cart-order-form__note.is-error,.cart-order-form__note.is-success{padding:.8rem;border-radius:12px;background:#fff}
 +.cart-panel__total{border-top:2px solid var(--clay);padding:1rem;background:#fff9f5;border-radius:14px}
 diff --git "a/C:\\CafeLIF\\prod\\public_html260926\\actions\\order.php" "b/C:\\CafeLIF\\dev\\actions\\order.php"
-index 7d2b63e..9ba3df9 100644
+index 7d2b63e..c879cef 100644
 --- "a/C:\\CafeLIF\\prod\\public_html260926\\actions\\order.php"
 +++ "b/C:\\CafeLIF\\dev\\actions\\order.php"
 @@ -2,6 +2,7 @@
@@ -285,7 +296,7 @@ index 7d2b63e..9ba3df9 100644
              ]);
              $reference = $candidate;
              $saved = true;
-@@ -143,15 +171,87 @@ try {
+@@ -143,15 +171,91 @@ try {
          $insert->execute([$orderId, $item['row']['id'], $item['item_name'], $item['qty'], $item['price']]);
      }
      $pdo->commit();
@@ -297,7 +308,9 @@ index 7d2b63e..9ba3df9 100644
 +    $environment = $isTest ? (basename(dirname(__DIR__)) === 'dev' ? 'dev' : 'test') : 'prod';
 +    $mailConfig = [];
 +    try { $mailConfig = cafelif_mail_config(); } catch (Throwable) { /* Ordren er allerede gemt. */ }
++    // I Test går mail kun til en eksplicit testmodtager eller caféens egen SMTP-afsender.
 +    $testRecipient = trim((string)($mailConfig['test_recipient'] ?? ''));
++    if ($testRecipient === '') $testRecipient = trim((string)($mailConfig['from_email'] ?? ''));
 +    $adminRecipient = trim((string)($mailConfig['admin_email'] ?? ''));
 +    $recipient = $isTest ? $testRecipient : $email;
 +    $subjectPrefix = $isTest ? '[TEST] ' : '';
@@ -361,6 +374,7 @@ index 7d2b63e..9ba3df9 100644
          'phone' => $phoneKey,
 +        'confirmation_email_requested' => $confirmationRequested,
 +        'customer_mail_sent' => $customerMailSent,
++        'test_mode' => $isTest,
          'message' => 'Bestillingen er sendt til Café LIF.',
      ]);
  } catch (Throwable $e) {
@@ -368,6 +382,7 @@ index 7d2b63e..9ba3df9 100644
 +        error_log('Café LIF mailbehandling fejlede efter gemt ordre ' . $reference);
 +        cafelif_order_respond(['ok' => true, 'reference' => $reference, 'phone' => $phoneKey,
 +            'confirmation_email_requested' => $confirmationRequested, 'customer_mail_sent' => false,
++            'test_mode' => true,
 +            'message' => 'Bestillingen er gemt, men mailstatus kunne ikke bekræftes.']);
 +    }
      if ($pdo->inTransaction()) $pdo->rollBack();

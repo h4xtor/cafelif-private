@@ -381,7 +381,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <p>Indtast det mobilnummer du brugte ved bestillingen. Du kan se dine seneste bestillinger og følge status på hver ordre her.</p>
       <form class="order-status-form" action="actions/order-status.php" method="post" data-order-status-form>
         <label>
-          <span>Mobilnummer / ordrenummer</span>
+          <span>Mobilnummer</span>
           <input type="tel" name="phone" inputmode="tel" autocomplete="tel" placeholder="fx 12 34 56 78" required>
         </label>
         <button class="btn btn--clay btn--full" type="submit">Se ordrestatus</button>
@@ -1059,6 +1059,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
   </button>
 
-  <script src="app.js?v=26"></script>
+  <script src="app.js?v=27"></script>
 </body>
 </html>

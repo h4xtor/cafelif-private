@@ -554,7 +554,9 @@
         const reference = escapeHtml(json.reference || json.phone || '');
         const phone = escapeHtml(json.phone || 'dit mobilnummer');
         const mailText = json.confirmation_email_requested
-          ? (json.customer_mail_sent ? `Vi har sendt en mailbekræftelse til ${escapeHtml(confirmationEmail?.value || '')}.` : 'Din ordre er gemt, men mailbekræftelsen kunne ikke sendes. Café LIF har stadig modtaget bestillingen.')
+          ? (json.customer_mail_sent
+            ? (json.test_mode ? `Test-mail er sendt til Café LIFs testmodtager. Oprindelig kunde-email: ${escapeHtml(confirmationEmail?.value || '')}.` : `Vi har sendt en mailbekræftelse til ${escapeHtml(confirmationEmail?.value || '')}.`)
+            : 'Din ordre er gemt, men mailbekræftelsen kunne ikke sendes. Café LIF har stadig modtaget bestillingen.')
           : 'Du har valgt ikke at få mailbekræftelse.';
         setOrderStatus('success', `
           <strong>Tak — bestillingen er sendt til Café LIF.</strong><br>

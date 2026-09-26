@@ -2,7 +2,7 @@ Local validation:
 PASS  node --check C:\CafeLIF\dev\app.js
 PASS  Static inspection: mail call follows database commit; Test recipient guard uses /test path or local dev directory.
 PASS  php -l index.php; php -l actions/order.php; php -l includes/mailer.php; php -l admin/orders.php (PHP 8.4.22 via WSL)
-NOT RUN  Test database migration and browser/SMTP checks (no Test deploy performed)
+PASS  Test DB import + migration, public browser checkout, server-side order persistence and Test mail send. Authenticated admin UI remains unverified.
 
 Manual Test cases (all pending):
 1. Empty cart cannot submit.
@@ -20,4 +20,5 @@ Manual Test cases (all pending):
 13. Order status lookup by mobile still works.
 14. Meeting catering still works.
 15. Regular and XL variants still work.
+
 
