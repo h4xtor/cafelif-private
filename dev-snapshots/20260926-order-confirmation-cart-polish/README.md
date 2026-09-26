@@ -26,3 +26,4 @@ Visual QA found missing Prod menu images after the Test database refresh. Ten ne
 
 
 Follow-up: Test admin order cards and order details now display whether the customer requested mail confirmation. The detail also distinguishes sent, failed, and unconfirmed mail. Live Test verified both Yes (order 88, test mail sent) and No (order 86).
+Follow-up: Sender is configured for noreply@cafelif.dk on Test, with Simply websmtp SMTP login retained separately. The confirmation email now uses a professional HTML layout with order number, pickup details, line items, total, contact details, and customer message. Test order LIF-260926-5BF16 was accepted by the recipient MX (250 OK) for admin@lense.dk.
