@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
+  <defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#be262d"/><stop offset="1" stop-color="#541116"/></linearGradient></defs>
+  <rect width="180" height="180" rx="42" fill="url(#g)"/>
+  <circle cx="133" cy="39" r="24" fill="#e2b052" opacity=".9"/>
+  <text x="90" y="111" text-anchor="middle" font-family="Arial, sans-serif" font-weight="900" font-size="56" fill="#fff" letter-spacing="-4">LIF</text>
+</svg>

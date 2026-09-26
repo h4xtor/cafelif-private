@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /actions/
+Disallow: /includes/
+Sitemap: https://cafelif.dk/sitemap.xml

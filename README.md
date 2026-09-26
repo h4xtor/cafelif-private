@@ -1,6 +1,10 @@
-# Café LIF – krypteret natbackup
+# Café LIF – Test-kode og krypteret natbackup
 
-Dette private repository indeholder kun backupautomatiseringen. Livefiler, SQL-dumps, kundedata, `config.local.php`, mailkonfiguration og private nøgler må aldrig ligge læsbart i Git-historikken.
+Dette private repository indeholder backupautomatiseringen og en deploybar kopi af Test-sitet i `test/`. Livefiler, SQL-dumps, kundedata, `config.local.php`, mailkonfiguration og private nøgler må aldrig ligge læsbart i Git-historikken.
+
+## Test-site
+
+Mappen `test/` svarer til `/public_html/test` på Simply og indeholder den aktuelle bestillingskurv, kundens valg om e-mailbekræftelse og mailens ordreindhold. Den indeholder ingen lokale konfigurationsfiler eller kundedata.
 
 ## Backupmodel
 

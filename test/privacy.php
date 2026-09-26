@@ -1,0 +1,12 @@
+<?php declare(strict_types=1); require __DIR__.'/includes/bootstrap.php'; ?><!doctype html><html lang="da"><head>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-PBD598DN');</script>
+<!-- End Google Tag Manager --><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Privatlivspolitik · Café LIF</title><link rel="stylesheet" href="<?= h(base_url('/assets/css/site.css')) ?>"></head><body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBD598DN"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) --><main class="menu-page"><div class="container" style="max-width:820px"><a class="brand" href="<?= h(base_url('/')) ?>"><img src="<?= h(base_url('/assets/img/cafeliflogo.jpg')) ?>" alt=""><span>Café LIF</span></a><div class="form-box" style="margin-top:28px"><span class="eyebrow">Juridisk</span><h1 class="section-title">Privatlivspolitik</h1><h2>Dataansvarlig</h2><p>Café LIF, <?= h(setting('address')) ?>. E-mail: <?= h(setting('email')) ?>. Telefon: <?= h(setting('phone')) ?>.</p><h2>Bestillinger og bordbookinger</h2><p>Vi behandler navn, telefonnummer, eventuel e-mail, dato, tidspunkt, antal gæster, valgte retter og beskeder for at håndtere din forespørgsel og levere den aftalte service.</p><h2>Statistik</h2><p>Hjemmesiden fører privacy-friendly brugsstatistik over sidevisninger og klik. IP-adresse og brugeragent gemmes kun som envejs-hash, og der anvendes ikke reklame- eller tredjepartscookies.</p><h2>Opbevaring</h2><p>Bestillinger og bookinger slettes eller anonymiseres, når de ikke længere er nødvendige af hensyn til kundeservice, dokumentation eller gældende bogføringskrav. Brugsstatistik bør som udgangspunkt ikke opbevares længere end 13 måneder.</p><h2>Dine rettigheder</h2><p>Du kan kontakte Café LIF for indsigt, rettelse eller sletning af oplysninger, når lovgivningen giver ret til det.</p><div class="notice">Teksten skal gennemgås af Café LIF før offentliggørelse, så opbevaringsperioder og juridisk dataansvarlig er korrekte.</div></div></div></main></body></html>
