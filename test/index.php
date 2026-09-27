@@ -1060,6 +1060,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
   </button>
 
-  <script src="app.js?v=28"></script>
+  <script src="app.js?v=29"></script>
 </body>
 </html>

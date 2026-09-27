@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require dirname(__DIR__) . '/includes/bootstrap.php';
 require_admin();
+require_once dirname(__DIR__) . '/includes/order_confirmation.php';
 
 $labels = [
     'new' => 'Ny',
@@ -105,6 +106,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!in_array($returnView, ['active', 'history', 'trash'], true)) $returnView = 'active';
 
     if ($id > 0) {
+        if ($action === 'send_confirmation') {
+            $pdo = db();
+            $lock = 'cafelif-order-mail-' . $id;
+            $lockHeld = false;
+            try {
+                $stmt = $pdo->prepare('SELECT GET_LOCK(?, 0)');
+                $stmt->execute([$lock]);
+                $lockHeld = (int)$stmt->fetchColumn() === 1;
+                if (!$lockHeld) throw new RuntimeException('En mail er allerede ved at blive sendt. Vent et øjeblik.');
+                $stmt = $pdo->prepare('SELECT * FROM orders WHERE id=? AND deleted_at IS NULL');
+                $stmt->execute([$id]);
+                $order = $stmt->fetch();
+                if (!$order) throw new RuntimeException('Ordren findes ikke eller ligger i papirkurven.');
+                if (empty($order['confirmation_email_requested']) && empty($_POST['confirm_manual_email'])) {
+                    throw new RuntimeException('Bekræft først, at kunden har bedt om en mail efter bestillingen.');
+                }
+                if (!empty($order['customer_mail_sent_at']) && strtotime($order['customer_mail_sent_at']) > time() - 60) {
+                    throw new RuntimeException('Der er lige sendt en mail. Vent et minut før gensendelse.');
+                }
+                $result = cafelif_send_order_confirmation($pdo, $id, $config, true);
+                if (!$result['customer_mail_sent']) throw new RuntimeException('Mailen kunne ikke sendes. Kontroller mailopsætningen og prøv igen.');
+                flash('success', $result['test_mode'] ? 'Ordrebekræftelsen er sendt til den konfigurerede testmodtager.' : 'Ordrebekræftelsen er sendt til kunden.');
+            } catch (Throwable $e) {
+                flash('error', $e instanceof RuntimeException && !($e instanceof PDOException) ? $e->getMessage() : 'Mailen kunne ikke sendes. Prøv igen senere.');
+            } finally {
+                if ($lockHeld) $pdo->prepare('SELECT RELEASE_LOCK(?)')->execute([$lock]);
+            }
+            redirect('/admin/orders.php?view=' . urlencode($returnView) . '&id=' . $id . '#ordre-mail');
+        }
         if ($action === 'status') {
             $status = (string)($_POST['status'] ?? 'new');
             if (array_key_exists($status, $labels)) {
@@ -216,19 +246,6 @@ $viewTitle = [
 
 admin_layout_start('Bestillinger', 'orders');
 ?>
-<section class="orders-v14-hero">
-  <div>
-    <p class="admin-kicker">Bestillinger fra hjemmesiden</p>
-    <h2>Her kan du se og styre kundernes bestillinger</h2>
-    <p>Her lander bestillingerne fra hjemmesiden. Siden opdaterer automatisk hvert 30. sekund, så nye bestillinger dukker op uden at du skal refreshe. Ring kunden op, bekræft aftalen og skift status, så kunden kan følge sin ordre med sit mobilnummer.</p>
-  </div>
-  <div class="orders-v14-guide">
-    <span><strong>1</strong> Nye ordrer kommer ind automatisk</span>
-    <span><strong>2</strong> Ring kunden op</span>
-    <span><strong>3</strong> Gem status</span>
-  </div>
-</section>
-
 <section class="orders-v14-stats" aria-label="Overblik over bestillinger">
   <article><span>Nye</span><strong><?= $countNew ?></strong><small>venter på opfølgning</small></article>
   <article><span>Aktive</span><strong><?= $countOpen ?></strong><small>åbne bestillinger</small></article>
@@ -247,7 +264,7 @@ admin_layout_start('Bestillinger', 'orders');
     <input type="hidden" name="view" value="<?= h($view) ?>">
     <label>
       <span>Søg</span>
-      <input name="q" value="<?= h($q) ?>" placeholder="Navn, mobilnummer eller e-mail">
+      <input name="q" value="<?= h($q) ?>" placeholder="Ordrenummer, navn, mobil eller e-mail">
     </label>
     <label>
       <span>Status</span>
@@ -288,7 +305,7 @@ admin_layout_start('Bestillinger', 'orders');
             <span><i class="fa-solid fa-phone"></i> <?= h($o['phone']) ?></span>
             <span><i class="fa-solid fa-clock"></i> <?= h(order_created_fmt($o['created_at'])) ?></span>
             <span><i class="fa-solid fa-calendar-check"></i> <?= h(order_datetime_line($o['desired_date'], $o['desired_time'])) ?></span>
-            <span><i class="fa-solid fa-envelope"></i> Mailbekræftelse ønsket: <?= !empty($o['confirmation_email_requested']) ? 'Ja' : 'Nej' ?></span>
+            <span><i class="fa-solid fa-envelope"></i> Mailbekræftelse ønsket: <strong style="font-weight:800"><?= !empty($o['confirmation_email_requested']) ? 'Ja' : 'Nej' ?></strong></span>
           </div>
           <div class="orders-v14-order-bottom">
             <span>Ref. <?= h($o['order_number'] ?: $o['phone']) ?></span>
@@ -331,7 +348,7 @@ admin_layout_start('Bestillinger', 'orders');
           <article><span>Kunde</span><strong><?= h($detail['customer_name']) ?></strong><small><?= h($detail['email'] ?: 'E-mail ikke angivet') ?></small></article>
           <article>
             <span>Mailbekræftelse ønsket</span>
-            <strong><?= !empty($detail['confirmation_email_requested']) ? 'Ja' : 'Nej' ?></strong>
+            <strong style="font-weight:800"><?= !empty($detail['confirmation_email_requested']) ? 'Ja' : 'Nej' ?></strong>
             <small>
               <?php if (empty($detail['confirmation_email_requested'])): ?>
                 Kunden fravalgte mailbekræftelse
@@ -351,6 +368,30 @@ admin_layout_start('Bestillinger', 'orders');
         </div>
 
         <div class="orders-v14-detail-grid">
+          <section class="orders-v14-section" id="ordre-mail">
+            <div class="orders-v14-section-head"><h3>Ordrebekræftelse på mail</h3></div>
+            <p>Modtager: <strong><?= h($detail['email'] ?: 'E-mail ikke angivet') ?></strong></p>
+            <?php if (str_contains((string)parse_url(base_url('/'), PHP_URL_PATH), '/test/')): ?>
+              <p class="orders-v14-hint">Test: mailen sendes kun til den konfigurerede testmodtager.</p>
+            <?php endif; ?>
+            <?php if (!empty($detail['customer_mail_sent_at'])): ?>
+              <p>Senest afsendt: <strong><?= h(order_created_fmt($detail['customer_mail_sent_at'])) ?></strong></p>
+            <?php endif; ?>
+            <?php if (!empty($detail['customer_mail_error'])): ?><p role="alert">Seneste forsøg mislykkedes. Du kan prøve igen her.</p><?php endif; ?>
+            <?php if (!$isDeleted && filter_var($detail['email'], FILTER_VALIDATE_EMAIL)): ?>
+              <form method="post" class="orders-v14-status-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="id" value="<?= (int)$detail['id'] ?>">
+                <input type="hidden" name="order_action" value="send_confirmation">
+                <input type="hidden" name="return_view" value="<?= h($view) ?>">
+                <?php if (empty($detail['confirmation_email_requested'])): ?>
+                  <label><input type="checkbox" name="confirm_manual_email" value="1" required> Kunden har efterfølgende bedt om en bekræftelse på mail</label>
+                <?php endif; ?>
+                <button class="button button--primary" type="submit"><i class="fa-solid fa-envelope"></i> <?= !empty($detail['customer_mail_sent_at']) ? 'Gensend bekræftelse til kunden på mail' : 'Send bekræftelse til kunden på mail' ?></button>
+              </form>
+              <p class="orders-v14-hint">Mailen indeholder den gemte ordre med retter, antal, priser og ønsket afhentning.</p>
+            <?php else: ?><p class="orders-v14-hint"><?= $isDeleted ? 'Gendan ordren for at sende en bekræftelse.' : 'En gyldig e-mailadresse er nødvendig for at sende bekræftelsen.' ?></p><?php endif; ?>
+          </section>
           <section class="orders-v14-section orders-v14-products">
             <div class="orders-v14-section-head"><h3>Valgte retter</h3><span><?= count($detailItems) ?> linje(r)</span></div>
             <?php if (!$detailItems): ?>

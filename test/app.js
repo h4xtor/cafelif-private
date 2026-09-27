@@ -344,7 +344,6 @@
     const fabCount = qs('[data-cart-fab-count]');
     const fabLabel = qs('[data-cart-fab-label]');
     const totalEl = qs('[data-cart-total]', root);
-    const buttonTotalEl = qs('[data-cart-button-total]', root);
     const noteEl = qs('[data-cart-note]', root);
     const panel = qs('#cart-panel');
     const fab = qs('#cart-fab');
@@ -405,6 +404,7 @@
       const sum = entries.reduce((s, i) => s + i.price * i.qty, 0);
       const totalLabel = sum > 0 ? fmt.format(sum) : '0 kr.';
       if (totalEl) totalEl.textContent = entries.length ? totalLabel : '0 kr.';
+      const buttonTotalEl = qs('[data-cart-button-total]', root);
       if (buttonTotalEl) buttonTotalEl.textContent = entries.length ? totalLabel : '0 kr.';
       if (fabLabel) fabLabel.textContent = entries.length ? `${label} · ${totalLabel}` : 'Vælg retter med plus';
       if (fab) fab.classList.toggle('has-items', qty > 0);
@@ -571,12 +571,19 @@
         orderForm.reset();
         syncConfirmationEmail();
         updateUI();
+        if (orderStatus) {
+          orderStatus.setAttribute('role', 'status');
+          orderStatus.setAttribute('tabindex', '-1');
+          orderStatus.focus({ preventScroll: true });
+          orderStatus.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
       } catch (err) {
         setOrderStatus('error', escapeHtml(err.message || 'Bestillingen kunne ikke sendes. Prøv igen eller ring til Café LIF.'));
       } finally {
         if (submitBtn) {
           submitBtn.disabled = false;
           submitBtn.innerHTML = originalText;
+          updateUI();
         }
       }
     });
